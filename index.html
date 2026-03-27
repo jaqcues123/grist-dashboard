@@ -1,1 +1,693 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>NEWS Build Dashboard</title>
+<script src="https://docs.getgrist.com/grist-plugin-api.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/chartjs-plugin-datalabels/2.2.0/chartjs-plugin-datalabels.min.js"></script>
+<style>
+@import url('https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@400;500;600;700;800&family=Barlow:wght@300;400;500;600&display=swap');
 
+:root {
+  --navy:       #1a2e4a;
+  --navy-mid:   #243d60;
+  --navy-light: #2e5080;
+  --gold:       #e8a020;
+  --gold-light: #f5c060;
+  --bg:         #eef1f6;
+  --white:      #ffffff;
+  --surface:    #f5f7fa;
+  --border:     #d0d7e3;
+  --border-mid: #b0bcd0;
+  --text:       #1a2030;
+  --text-dim:   #4a5878;
+  --text-muted: #8090a8;
+  --inservice-hdr:  #1e3a5f;
+  --forsale-hdr:    #1a5c38;
+  --notoolbox-hdr:  #7a5200;
+  --awaitpay-hdr:   #0e5c4a;
+  --awaitdel-hdr:   #4a1a80;
+  --inservice-odd:  #ffffff;
+  --inservice-even: #f4f7fb;
+  --forsale-odd:    #f5fff8;
+  --forsale-even:   #e8f5ec;
+  --notoolbox-odd:  #fffde6;
+  --notoolbox-even: #fff8cc;
+  --awaitpay-odd:   #e8faf0;
+  --awaitpay-even:  #d0f5e4;
+  --awaitdel-odd:   #f3eeff;
+  --awaitdel-even:  #e6d8ff;
+  --kpi-inprog:   #2563eb;
+  --kpi-onlot:    #059669;
+  --kpi-payment:  #d97706;
+  --kpi-delivery: #7c3aed;
+  --kpi-cash:     #0891b2;
+}
+
+* { box-sizing: border-box; margin: 0; padding: 0; }
+
+body {
+  font-family: 'Barlow', sans-serif;
+  background: var(--bg);
+  color: var(--text);
+  font-size: 12px;
+  min-height: 100vh;
+  overflow-x: hidden;
+}
+
+#navbar {
+  display: flex;
+  align-items: stretch;
+  background: var(--navy);
+  border-bottom: 3px solid var(--gold);
+  height: 44px;
+  position: sticky;
+  top: 0;
+  z-index: 100;
+}
+#navbar .brand {
+  display: flex;
+  align-items: center;
+  padding: 0 16px;
+  font-family: 'Barlow Condensed', sans-serif;
+  font-size: 15px;
+  font-weight: 800;
+  letter-spacing: 0.12em;
+  color: var(--gold);
+  text-transform: uppercase;
+  border-right: 1px solid rgba(255,255,255,0.1);
+  white-space: nowrap;
+  min-width: 180px;
+}
+#navbar .brand span { color: rgba(255,255,255,0.5); margin-left: 6px; font-weight: 400; font-size: 11px; }
+.nav-tabs { display: flex; align-items: stretch; flex: 1; overflow-x: auto; }
+.nav-tab {
+  display: flex;
+  align-items: center;
+  padding: 0 16px;
+  font-family: 'Barlow Condensed', sans-serif;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: rgba(255,255,255,0.5);
+  cursor: pointer;
+  border-bottom: 3px solid transparent;
+  margin-bottom: -3px;
+  white-space: nowrap;
+  transition: color 0.15s, border-color 0.15s;
+  user-select: none;
+}
+.nav-tab:hover { color: rgba(255,255,255,0.85); }
+.nav-tab.active { color: var(--gold); border-bottom-color: var(--gold); }
+.nav-tab .tab-num {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 16px; height: 16px;
+  border-radius: 50%;
+  background: rgba(255,255,255,0.1);
+  font-size: 9px;
+  margin-right: 6px;
+}
+.nav-right {
+  display: flex;
+  align-items: center;
+  padding: 0 12px;
+  gap: 8px;
+  border-left: 1px solid rgba(255,255,255,0.1);
+}
+#refresh-btn {
+  background: rgba(255,255,255,0.08);
+  border: 1px solid rgba(255,255,255,0.15);
+  color: rgba(255,255,255,0.6);
+  padding: 4px 10px;
+  border-radius: 3px;
+  font-family: 'Barlow Condensed', sans-serif;
+  font-size: 10px;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  cursor: pointer;
+  transition: background 0.15s;
+}
+#refresh-btn:hover { background: rgba(255,255,255,0.15); color: #fff; }
+#last-updated {
+  font-family: 'Barlow Condensed', sans-serif;
+  font-size: 9px;
+  color: rgba(255,255,255,0.3);
+  letter-spacing: 0.06em;
+}
+
+/* PAGES — this is the critical rule */
+.page { display: none; }
+.page.active { display: block; }
+
+.page-header {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 16px;
+  background: var(--white);
+  border-bottom: 1px solid var(--border);
+  flex-wrap: wrap;
+}
+.page-title {
+  font-family: 'Barlow Condensed', sans-serif;
+  font-size: 16px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  color: var(--navy);
+  text-transform: uppercase;
+}
+.page-header .sep { flex: 1; }
+.filter-group { display: flex; align-items: center; gap: 6px; }
+.filter-group label {
+  font-family: 'Barlow Condensed', sans-serif;
+  font-size: 9px;
+  letter-spacing: 0.12em;
+  color: var(--text-muted);
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+.filter-group select, .filter-group input[type="date"] {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  color: var(--text);
+  padding: 4px 8px;
+  font-family: 'Barlow', sans-serif;
+  font-size: 11px;
+  border-radius: 3px;
+  outline: none;
+  cursor: pointer;
+  min-width: 110px;
+}
+.filter-group select:focus, .filter-group input[type="date"]:focus { border-color: var(--navy-light); }
+
+#kpi-strip {
+  display: flex;
+  gap: 10px;
+  padding: 12px 16px 0;
+  flex-wrap: wrap;
+}
+.kpi-card {
+  flex: 1;
+  min-width: 150px;
+  background: var(--white);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 12px 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  position: relative;
+  overflow: hidden;
+}
+.kpi-card::before { content:''; position:absolute; top:0; left:0; right:0; height:3px; }
+.kpi-card.inprog::before   { background: var(--kpi-inprog); }
+.kpi-card.onlot::before    { background: var(--kpi-onlot); }
+.kpi-card.payment::before  { background: var(--kpi-payment); }
+.kpi-card.delivery::before { background: var(--kpi-delivery); }
+.kpi-card.cash::before     { background: var(--kpi-cash); }
+.kpi-label {
+  font-family: 'Barlow Condensed', sans-serif;
+  font-size: 9px; font-weight: 600;
+  letter-spacing: 0.14em; text-transform: uppercase;
+  color: var(--text-muted);
+}
+.kpi-value {
+  font-family: 'Barlow Condensed', sans-serif;
+  font-size: 28px; font-weight: 700; line-height: 1;
+}
+.kpi-card.inprog   .kpi-value { color: var(--kpi-inprog); }
+.kpi-card.onlot    .kpi-value { color: var(--kpi-onlot); }
+.kpi-card.payment  .kpi-value { color: var(--kpi-payment); }
+.kpi-card.delivery .kpi-value { color: var(--kpi-delivery); }
+.kpi-card.cash     .kpi-value { color: var(--kpi-cash); }
+.kpi-sub { font-size: 11px; color: var(--text-dim); font-weight: 500; }
+.kpi-sub .amount { font-family: 'Barlow Condensed', sans-serif; font-weight: 600; }
+
+#backlog-area { padding: 12px 16px; overflow-x: auto; }
+
+.section-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 11.5px;
+  margin-bottom: 14px;
+  box-shadow: 0 1px 4px rgba(0,0,0,0.08);
+  border-radius: 4px;
+  overflow: hidden;
+  min-width: 1100px;
+}
+tr.section-hdr td {
+  padding: 7px 10px;
+  font-family: 'Barlow Condensed', sans-serif;
+  font-size: 12px; font-weight: 700;
+  letter-spacing: 0.14em; text-transform: uppercase;
+  color: #fff;
+}
+tr.section-hdr .s-count {
+  display: inline-block; margin-left: 8px;
+  background: rgba(255,255,255,0.2); border-radius: 10px;
+  padding: 1px 8px; font-size: 10px;
+}
+tr.section-hdr .s-value { float: right; font-size: 11px; opacity: 0.8; font-weight: 400; }
+tr.col-hdr th {
+  padding: 5px 8px; text-align: left;
+  font-family: 'Barlow Condensed', sans-serif;
+  font-size: 9px; font-weight: 600;
+  letter-spacing: 0.12em; text-transform: uppercase;
+  color: rgba(255,255,255,0.7);
+  border-bottom: 1px solid rgba(0,0,0,0.15);
+  white-space: nowrap;
+}
+tr.data-row td {
+  padding: 5px 8px;
+  border-bottom: 1px solid var(--border);
+  vertical-align: middle; white-space: nowrap;
+  max-width: 200px; overflow: hidden; text-overflow: ellipsis;
+}
+tr.data-row:last-child td { border-bottom: none; }
+tr.data-row:hover td { filter: brightness(0.96); cursor: default; }
+tr.empty-row td {
+  padding: 12px; font-style: italic;
+  color: var(--text-muted); background: #fafafa; text-align: center;
+}
+
+.sec-inservice tr.section-hdr td  { background: var(--inservice-hdr); }
+.sec-inservice tr.col-hdr th      { background: #2a4f7a; }
+.sec-inservice tr.data-row:nth-child(odd) td  { background: var(--inservice-odd); }
+.sec-inservice tr.data-row:nth-child(even) td { background: var(--inservice-even); }
+.sec-forsale tr.section-hdr td    { background: var(--forsale-hdr); }
+.sec-forsale tr.col-hdr th        { background: #236b45; }
+.sec-forsale tr.data-row:nth-child(odd) td  { background: var(--forsale-odd); }
+.sec-forsale tr.data-row:nth-child(even) td { background: var(--forsale-even); }
+.sec-notoolbox tr.section-hdr td  { background: var(--notoolbox-hdr); }
+.sec-notoolbox tr.col-hdr th      { background: #8a6010; }
+.sec-notoolbox tr.data-row:nth-child(odd) td  { background: var(--notoolbox-odd); }
+.sec-notoolbox tr.data-row:nth-child(even) td { background: var(--notoolbox-even); }
+.sec-awaitpay tr.section-hdr td   { background: var(--awaitpay-hdr); }
+.sec-awaitpay tr.col-hdr th       { background: #167055; }
+.sec-awaitpay tr.data-row:nth-child(odd) td  { background: var(--awaitpay-odd); }
+.sec-awaitpay tr.data-row:nth-child(even) td { background: var(--awaitpay-even); }
+.sec-awaitdel tr.section-hdr td   { background: var(--awaitdel-hdr); }
+.sec-awaitdel tr.col-hdr th       { background: #5c2898; }
+.sec-awaitdel tr.data-row:nth-child(odd) td  { background: var(--awaitdel-odd); }
+.sec-awaitdel tr.data-row:nth-child(even) td { background: var(--awaitdel-even); }
+
+.toggle-wrap { display: flex; align-items: center; justify-content: center; }
+.bool-toggle { position: relative; width: 32px; height: 16px; flex-shrink: 0; }
+.bool-toggle input { opacity: 0; width: 0; height: 0; position: absolute; }
+.bool-toggle .slider {
+  position: absolute; cursor: pointer; inset: 0;
+  background: #c8d0dc; border-radius: 16px; transition: background 0.2s;
+}
+.bool-toggle .slider::before {
+  content: ''; position: absolute;
+  width: 12px; height: 12px; left: 2px; top: 2px;
+  background: white; border-radius: 50%; transition: transform 0.2s;
+}
+.bool-toggle input:checked + .slider { background: #22c55e; }
+.bool-toggle input:checked + .slider::before { transform: translateX(16px); }
+.bool-toggle.saving .slider { background: #f59e0b; }
+.bool-toggle.error .slider  { background: #ef4444; }
+
+select.status-sel {
+  background: transparent; border: 1px solid transparent;
+  color: var(--text); font-family: 'Barlow', sans-serif;
+  font-size: 11px; padding: 2px 4px; border-radius: 2px;
+  outline: none; cursor: pointer; width: 100%;
+}
+select.status-sel:hover { border-color: var(--border); background: rgba(255,255,255,0.8); }
+select.status-sel:focus { border-color: var(--navy-light); background: #fff; }
+
+input.cell-in, select.cell-sel {
+  background: transparent; border: 1px solid transparent;
+  color: var(--text); font-family: 'Barlow', sans-serif;
+  font-size: 11px; padding: 2px 4px; border-radius: 2px;
+  outline: none; width: 100%;
+}
+input.cell-in:hover, select.cell-sel:hover { border-color: var(--border); background: rgba(255,255,255,0.8); }
+input.cell-in:focus, select.cell-sel:focus { border-color: var(--navy-light); background: #fff; }
+input.cell-in[type="date"] { color-scheme: light; min-width: 96px; }
+
+.charts-row {
+  display: flex; gap: 12px; padding: 12px 16px; flex-wrap: wrap;
+}
+.chart-card {
+  background: var(--white); border: 1px solid var(--border);
+  border-radius: 6px; padding: 14px; flex: 1; min-width: 300px;
+}
+.chart-card h3 {
+  font-family: 'Barlow Condensed', sans-serif;
+  font-size: 11px; font-weight: 700;
+  letter-spacing: 0.14em; text-transform: uppercase;
+  color: var(--text-muted); margin-bottom: 10px;
+}
+.chart-card canvas { max-height: 220px; }
+
+.pipeline-funnel { display: flex; gap: 10px; padding: 0 16px 12px; flex-wrap: wrap; }
+.funnel-stage {
+  flex: 1; min-width: 120px; background: var(--white);
+  border: 1px solid var(--border); border-radius: 6px;
+  padding: 12px; text-align: center; position: relative; overflow: hidden;
+}
+.funnel-stage::before { content:''; position:absolute; top:0; left:0; right:0; height:3px; }
+.funnel-stage.secured::before  { background: #22c55e; }
+.funnel-stage.quoted::before   { background: #3b82f6; }
+.funnel-stage.prospect::before { background: #f59e0b; }
+.funnel-stage.closed::before   { background: #6b7280; }
+.funnel-stage-label {
+  font-family: 'Barlow Condensed', sans-serif; font-size: 9px;
+  font-weight: 700; letter-spacing: 0.14em; text-transform: uppercase;
+  color: var(--text-muted); margin-bottom: 4px;
+}
+.funnel-stage-count {
+  font-family: 'Barlow Condensed', sans-serif; font-size: 26px;
+  font-weight: 700; color: var(--navy); line-height: 1;
+}
+.funnel-stage-value { font-size: 11px; color: var(--text-dim); font-weight: 500; margin-top: 2px; }
+
+.toggle-btns { display: flex; border: 1px solid var(--border); border-radius: 3px; overflow: hidden; }
+.toggle-btns button {
+  padding: 5px 12px; background: var(--surface); border: none;
+  border-right: 1px solid var(--border); color: var(--text-dim);
+  font-family: 'Barlow Condensed', sans-serif; font-size: 10px;
+  letter-spacing: 0.1em; text-transform: uppercase;
+  cursor: pointer; transition: background 0.15s, color 0.15s;
+}
+.toggle-btns button:last-child { border-right: none; }
+.toggle-btns button.active { background: var(--navy); color: #fff; }
+
+#global-loading {
+  display: flex; flex-direction: column; align-items: center;
+  justify-content: center; padding: 80px 20px; gap: 12px;
+  color: var(--text-muted); font-family: 'Barlow Condensed', sans-serif;
+  font-size: 12px; letter-spacing: 0.12em;
+}
+.spinner {
+  width: 24px; height: 24px;
+  border: 3px solid var(--border); border-top-color: var(--navy);
+  border-radius: 50%; animation: spin 0.8s linear infinite;
+}
+@keyframes spin { to { transform: rotate(360deg); } }
+
+::-webkit-scrollbar { width: 5px; height: 5px; }
+::-webkit-scrollbar-track { background: var(--bg); }
+::-webkit-scrollbar-thumb { background: var(--border-mid); border-radius: 3px; }
+
+#toast {
+  position: fixed; bottom: 16px; right: 16px;
+  background: var(--navy); color: #fff;
+  padding: 8px 16px; border-radius: 4px;
+  font-family: 'Barlow Condensed', sans-serif;
+  font-size: 11px; letter-spacing: 0.08em;
+  opacity: 0; transform: translateY(8px);
+  transition: opacity 0.2s, transform 0.2s;
+  pointer-events: none; z-index: 999;
+}
+#toast.show { opacity: 1; transform: translateY(0); }
+#toast.error { background: #dc2626; }
+
+/* Inventory chart card */
+.inv-chart-card {
+  background: var(--white); border: 1px solid var(--border);
+  border-radius: 6px; padding: 14px; margin: 0 16px 12px;
+}
+.inv-chart-card h3 {
+  font-family: 'Barlow Condensed', sans-serif; font-size: 11px;
+  font-weight: 700; letter-spacing: 0.14em; text-transform: uppercase;
+  color: var(--text-muted); margin-bottom: 10px;
+}
+</style>
+</head>
+<body>
+
+<nav id="navbar">
+  <div class="brand">NEWS<span>DASHBOARD</span></div>
+  <div class="nav-tabs">
+    <div class="nav-tab active" data-page="operations"><span class="tab-num">1</span>Production</div>
+    <div class="nav-tab" data-page="gantt"><span class="tab-num">2</span>Gantt Charts</div>
+    <div class="nav-tab" data-page="sales"><span class="tab-num">3</span>Sales &amp; Pipeline</div>
+    <div class="nav-tab" data-page="cashflow"><span class="tab-num">4</span>Cash Flow</div>
+    <div class="nav-tab" data-page="inventory"><span class="tab-num">5</span>Stock Inventory</div>
+    <div class="nav-tab" data-page="nrc"><span class="tab-num">6</span>NRC Tracking</div>
+  </div>
+  <div class="nav-right">
+    <span id="last-updated">—</span>
+    <button id="refresh-btn">⟳ Refresh</button>
+  </div>
+</nav>
+
+<div id="global-loading">
+  <div class="spinner"></div>
+  LOADING DASHBOARD...
+</div>
+
+<!-- ══════════════════ PAGE 1 — OPERATIONS ══════════════════ -->
+<div class="page" id="page-operations">
+  <div id="kpi-strip">
+    <div class="kpi-card inprog">
+      <div class="kpi-label">In Progress</div>
+      <div class="kpi-value" id="kpi-inprog-count">—</div>
+      <div class="kpi-sub">Active builds</div>
+    </div>
+    <div class="kpi-card onlot">
+      <div class="kpi-label">Completed on Lot</div>
+      <div class="kpi-value" id="kpi-onlot-count">—</div>
+      <div class="kpi-sub"><span class="amount" id="kpi-onlot-value">—</span> retail value</div>
+      <div class="kpi-sub"><span class="amount" id="kpi-onlot-cost">—</span> holding cost </div>
+    </div>
+    <div class="kpi-card payment">
+      <div class="kpi-label">Awaiting Payment</div>
+      <div class="kpi-value" id="kpi-payment-count">—</div>
+      <div class="kpi-sub"><span class="amount" id="kpi-payment-value">—</span> outstanding</div>
+    </div>
+    <div class="kpi-card delivery">
+      <div class="kpi-label">Awaiting Delivery</div>
+      <div class="kpi-value" id="kpi-delivery-count">—</div>
+      <div class="kpi-sub"><span class="amount" id="kpi-delivery-value">—</span> retail value</div>
+    </div>
+   <div class="kpi-card cash">
+     <div class="kpi-label">Deliveries MTD</div>
+     <div class="kpi-value" id="kpi-cash-net">—</div>
+     <div class="kpi-sub" id="kpi-cash-sub">Current month</div>
+   </div>
+  </div>
+  <div class="page-header" style="margin-top:10px;">
+    <span class="page-title">Build Backlog</span>
+    <div class="sep"></div>
+    <div class="filter-group">
+      <label>Customer</label>
+      <select id="ops-filter-name"><option value="ANY">— All —</option></select>
+    </div>
+    <div class="filter-group">
+      <label>Chassis</label>
+      <select id="ops-filter-chassis"><option value="ANY">— All —</option></select>
+    </div>
+    <div class="filter-group">
+      <label>Body Class</label>
+      <select id="ops-filter-body"><option value="ANY">— All —</option></select>
+    </div>
+  </div>
+  <div id="backlog-area"></div>
+</div>
+
+<!-- ══════════════════ PAGE 2 — GANTT ══════════════════ -->
+<div class="page" id="page-gantt">
+  <div class="page-header">
+    <span class="page-title">Production Board</span>
+    <div class="sep"></div>
+    <div class="filter-group">
+      <label>View</label>
+      <div class="toggle-btns" id="gantt-range-toggle">
+        <button class="active" data-range="short">Short Term</button>
+        <button data-range="long">Long Term</button>
+      </div>
+    </div>
+  </div>
+  <div id="gantt-container" style="padding:12px 16px;overflow-x:auto;"></div>
+</div>
+
+<!-- ══════════════════ PAGE 3 — SALES & PIPELINE ══════════════════ -->
+<div class="page" id="page-sales">
+  <div class="page-header">
+    <span class="page-title">Sales &amp; Pipeline</span>
+    <div class="sep"></div>
+    <!-- Chart year filter — filters monthly revenue chart and body class chart -->
+    <div class="filter-group">
+      <label>Chart Year</label>
+      <select id="chart-year-sel"><option value="ALL">— All Years —</option></select>
+    </div>
+  </div>
+
+  <div style="padding:12px 16px 4px;">
+    <div style="font-family:'Barlow Condensed',sans-serif;font-size:10px;font-weight:700;letter-spacing:0.14em;text-transform:uppercase;color:var(--text-muted);margin-bottom:8px;">Pipeline by Stage</div>
+  </div>
+  <div class="pipeline-funnel" id="pipeline-funnel"></div>
+
+  <div class="charts-row">
+    <div class="chart-card" style="flex:2;min-width:400px;">
+      <h3>Monthly Revenue vs Target</h3>
+      <canvas id="chart-monthly-revenue"></canvas>
+    </div>
+    <div class="chart-card" style="flex:1;">
+      <h3>Sales by Body Class</h3>
+      <canvas id="chart-body-class"></canvas>
+    </div>
+  </div>
+
+  <!-- Monthly tables header with its own month+year picker -->
+  <div class="page-header" style="border-top:1px solid var(--border);">
+    <span class="page-title" style="font-size:13px;">Monthly Detail</span>
+    <div class="sep"></div>
+    <div class="filter-group">
+      <label>Month</label>
+      <select id="sales-month-sel">
+        <option value="1">January</option><option value="2">February</option>
+        <option value="3">March</option><option value="4">April</option>
+        <option value="5">May</option><option value="6">June</option>
+        <option value="7">July</option><option value="8">August</option>
+        <option value="9">September</option><option value="10">October</option>
+        <option value="11">November</option><option value="12">December</option>
+      </select>
+    </div>
+    <div class="filter-group">
+      <label>Year</label>
+      <select id="sales-year-sel"></select>
+    </div>
+  </div>
+  <div id="monthly-sales-wip-container" style="padding:0 16px 16px;"></div>
+</div>
+<!-- ↑ page-sales closes here — this was the missing closing div -->
+
+<!-- ══════════════════ PAGE 4 — CASH FLOW ══════════════════ -->
+<div class="page" id="page-cashflow">
+  <div class="page-header">
+    <span class="page-title">Cash Flow</span>
+    <div class="sep"></div>
+    <div class="filter-group">
+      <label>View</label>
+      <div class="toggle-btns" id="cf-period-toggle">
+        <button class="active" data-period="week">Weekly</button>
+        <button data-period="month">Monthly</button>
+      </div>
+    </div>
+    <div class="filter-group">
+      <label>Months ahead</label>
+      <select id="cf-horizon">
+        <option value="3">3 months</option>
+        <option value="6" selected>6 months</option>
+        <option value="12">12 months</option>
+      </select>
+    </div>
+  </div>
+ <div style="padding:12px 16px 0;">
+  <div class="chart-card">
+    <h3>Cash Flow — <span id="cf-period-label">Weekly</span> &nbsp;<span style="font-weight:400;color:var(--text-muted);">Inflow / Outflow / Net</span></h3>
+    <canvas id="chart-cashflow" style="max-height:260px;"></canvas>
+  </div>
+ </div>
+  <div style="padding:0 16px 16px;" id="cf-events-container"></div>
+</div>
+
+<!-- ══════════════════ PAGE 5 — STOCK INVENTORY ══════════════════ -->
+
+<div class="page" id="page-inventory">
+  <!-- Inventory value chart -->
+  <div class="inv-chart-card">
+    <div style="display:flex;align-items:center;gap:16px;margin-bottom:10px;flex-wrap:wrap;">
+      <h3 style="margin:0;">Inventory Value Over Time</h3>
+      <div class="filter-group" style="margin-left:auto;">
+        <label>Projection Mode</label>
+        <select id="inv-proj-mode">
+          <option value="none">No sales projected</option>
+          <option value="pending">With Sale Dates Projected</option>
+        </select>
+      </div>
+    </div>
+    <canvas id="chart-inv-value" style="max-height:200px;"></canvas>
+  </div>
+  
+  <div class="page-header">
+    <span class="page-title">Stock Inventory Forecast</span>
+    <div class="sep"></div>
+    <div class="filter-group">
+      <label>Snapshot Date</label>
+      <input type="date" id="inv-snap-date"/>
+    </div>
+    <div class="filter-group">
+      <label>Body Class</label>
+      <select id="inv-filter-body"><option value="ANY">— Any —</option></select>
+    </div>
+    <div class="filter-group">
+      <label>Chassis</label>
+      <select id="inv-filter-chassis"><option value="ANY">— Any —</option></select>
+    </div>
+    <div class="filter-group">
+      <label>Color</label>
+      <select id="inv-filter-color"><option value="ANY">— Any —</option></select>
+    </div>
+    <div class="filter-group">
+      <label>Group By</label>
+      <div class="toggle-btns" id="inv-group-toggle">
+        <button class="active" data-grp="body">Body</button>
+        <button data-grp="chassis">Chassis</button>
+        <button data-grp="color">Color</button>
+        <button data-grp="flat">Flat</button>
+      </div>
+    </div>
+  </div>
+  <div id="inv-kpi" style="padding:0 16px 10px;display:flex;gap:10px;flex-wrap:wrap;"></div>
+  <div id="inv-table-area" style="padding:0 16px 16px;overflow-x:auto;"></div>
+</div>
+
+<!-- ══════════════════ PAGE 6 — NRC ORDER TRACKING ══════════════════ -->
+<div class="page" id="page-nrc">
+  <div class="page-header">
+    <span class="page-title">NRC Order Tracking</span>
+    <div class="sep"></div>
+    <div class="filter-group">
+      <label>From</label>
+      <input type="date" id="nrc-date-from"/>
+    </div>
+    <div class="filter-group">
+      <label>To</label>
+      <input type="date" id="nrc-date-to"/>
+    </div>
+    <div class="filter-group">
+      <label>Status</label>
+      <select id="nrc-status-sel">
+        <option value="ALL">— Any Status —</option>
+      </select>
+    </div>
+  </div>
+
+  <!-- KPI strip -->
+  <div style="display:flex;gap:10px;padding:12px 16px 0;flex-wrap:wrap;" id="nrc-kpi-strip"></div>
+
+  <!-- Charts row -->
+  <div class="charts-row">
+    <div class="chart-card" style="flex:1;min-width:280px;">
+      <h3>Arrivals by Month</h3>
+      <canvas id="chart-nrc-arrivals"></canvas>
+    </div>
+    <div class="chart-card" style="flex:1;min-width:280px;" id="nrc-biggest-changes-card">
+       <div id="chart-nrc-status"></div>
+    </div>
+    <div class="chart-card" style="flex:1;min-width:280px;">
+      <h3>EDD Drift Distribution</h3>
+      <canvas id="chart-nrc-drift"></canvas>
+    </div>
+  </div>
+
+  <!-- Main table -->
+  <div style="padding:0 16px 16px;">
+    <div id="nrc-table-area"></div>
+  </div>
+</div>
+
+<div id="toast"></div>
+</body>
+</html>
